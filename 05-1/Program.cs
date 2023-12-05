@@ -13,15 +13,16 @@ long GetMinLocation(SeedGroup[] seedGroups, Dictionary<string, Map> mapsBySource
     object locker = new object();
     long minLocation = long.MaxValue;
 
-    Parallel.ForEach(seedGroups, new ParallelOptions { MaxDegreeOfParallelism = 30 }, group =>
+    Parallel.ForEach(seedGroups, new ParallelOptions { MaxDegreeOfParallelism = 8 }, group =>
     {
-        Console.WriteLine($"Starting seed group with {group.Length} entries");
-        long lastMappingsSeed = 0;
-        Dictionary<string, long> lastMappings = new Dictionary<string, long>();
+        Console.WriteLine($"Starting seed group {group.Start}-{group.Start + group.Length}");
 
-        for (long seed = group.Start; seed < group.Start + group.Length; seed++)
+        long seed = group.Start;
+        while(seed < group.Start + group.Length)
         {
+            Console.WriteLine($"Group {group.Start}-{group.Start + group.Length} checking seed {seed}");
             State state = new State(seed, "seed");
+
             while (state.Type != "location")
             {
                 state = GetNextState(state, mapsBySource);
@@ -36,11 +37,13 @@ long GetMinLocation(SeedGroup[] seedGroups, Dictionary<string, Map> mapsBySource
                         if (state.Value < minLocation)
                         {
                             minLocation = state.Value;
-                            Console.WriteLine($"Min location: {minLocation}");
                         }
                     }
                 }
             }
+
+            Console.WriteLine($"Group {group.Start} skipping {state.NextUsefulIncrement} seeds");
+            seed += state.NextUsefulIncrement == 1 ? 1 : state.NextUsefulIncrement - 1;
         }
     });
 
@@ -53,13 +56,23 @@ State GetNextState(State currentState, Dictionary<string, Map> dictionary)
 
     var matchingMapEntry = map.Entries.Where(x =>
         currentState.Value >= x.SourceStart && currentState.Value <= x.SourceStart + x.Length).ToArray();
+    long nextUsefulIncrement;
     if (matchingMapEntry.Any())
     {
         var matchingEntry = matchingMapEntry.First();
         currentState.Value += matchingEntry.TargetStart - matchingEntry.SourceStart;
+        nextUsefulIncrement = matchingEntry.TargetStart + matchingEntry.Length - currentState.Value + 1;
     }
-    
+    else
+    {
+        nextUsefulIncrement = map.GetNextEntrySourceValueAfter(currentState.Value) - currentState.Value;
+    }
     currentState.Type = map.Target;
+
+    if (nextUsefulIncrement < currentState.NextUsefulIncrement)
+    {
+        currentState.NextUsefulIncrement = nextUsefulIncrement;
+    }
     
     return currentState;
 }
@@ -102,7 +115,6 @@ IEnumerable<Map> GetMapsFromBlocksOfLines(IEnumerable<string[]> blocks)
     }
 }
 
-
 IEnumerable<string[]> SplitIntoBlocks(string[] lines)
 {
     List<string> result = new List<string>();
@@ -136,6 +148,16 @@ struct State
 
 record SeedGroup(long Start, long Length);
 
-record Map(string Source, string Target, MapEntry[] Entries);
+record Map(string Source, string Target, MapEntry[] Entries)
+{
+    public long GetNextEntrySourceValueAfter(long sourceValue)
+    {
+        var nextEntries = Entries
+            .Select(e => e.SourceStart)
+            .Where(i => i > sourceValue)
+            .ToArray();
+        return nextEntries.Any() ? nextEntries.Min() : long.MaxValue;
+    }
+}
 
 record MapEntry (long TargetStart, long SourceStart,  long Length);
