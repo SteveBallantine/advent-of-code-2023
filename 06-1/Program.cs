@@ -27,14 +27,14 @@ Race PopulateRaceWithMinMaxValues(Race race)
     return race;
 }
 
-int FindMinWinningButtonTime(Race race)
+long FindMinWinningButtonTime(Race race)
 {
-    var min = 0;
+    var min = 0l;
     var max = race.Time;
     
     while (min < max)
     {
-        int mid = (min + max) / 2;
+        var mid = (min + max) / 2;
         var distance = GetDistanceForButtonTime(race, mid);
         var distanceRising = distance < GetDistanceForButtonTime(race, mid + 1);
         if (distanceRising)
@@ -56,14 +56,14 @@ int FindMinWinningButtonTime(Race race)
     return min;
 }
 
-int FindMaxWinningButtonTime(Race race, int minButtonWinningTime)
+long FindMaxWinningButtonTime(Race race, long minButtonWinningTime)
 {
     var min = minButtonWinningTime;
     var max = race.Time;
     
     while (min < max)
     {
-        int mid = (min + max) / 2;
+        var mid = (min + max) / 2;
         if (mid == min) mid = max;
         var distance = GetDistanceForButtonTime(race, mid);
         var distanceRising = distance < GetDistanceForButtonTime(race, mid + 1);
@@ -86,7 +86,7 @@ int FindMaxWinningButtonTime(Race race, int minButtonWinningTime)
     return min;
 }
 
-int GetDistanceForButtonTime(Race race, int timeToPress)
+long GetDistanceForButtonTime(Race race, long timeToPress)
 {
     var speed = timeToPress;
     var remainingTime = race.Time - timeToPress;
@@ -107,8 +107,22 @@ IEnumerable<Race> GetRaces(string[] lines)
     {
         throw new Exception("Time/Distance mismatch");
     }
+
+    var timeString = string.Concat(timeStrings.Skip(1));
+    var distanceString = string.Concat(minDistanceStrings.Skip(1));
     
-    for (int i = 1; i < timeStrings.Length; i++)
+    if (!long.TryParse(timeString, out var time))
+    {
+        throw new Exception($"Bad time {timeString}");
+    }
+    if (!long.TryParse(distanceString, out var minDistance))
+    {
+        throw new Exception($"Bad time {distanceString}");
+    }
+
+    yield return new Race(time, minDistance);
+
+    /*for (int i = 1; i < timeStrings.Length; i++)
     {
         if (!int.TryParse(timeStrings[i], out var time))
         {
@@ -120,14 +134,14 @@ IEnumerable<Race> GetRaces(string[] lines)
         }
 
         yield return new Race(time, minDistance);
-    }
+    }*/
 }
 
 
 
-record Race(int Time, int MinDistanceToWin)
+record Race(long Time, long MinDistanceToWin)
 {
-    public int? MinButtonPressTimeToWin { get; set; }
-    public int? MaxButtonPressTimeToWin { get; set; }
+    public long? MinButtonPressTimeToWin { get; set; }
+    public long? MaxButtonPressTimeToWin { get; set; }
 }
     
