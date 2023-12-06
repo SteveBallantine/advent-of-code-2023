@@ -12,15 +12,16 @@ long GetMinLocation(SeedGroup[] seedGroups, Dictionary<string, Map> mapsBySource
 {
     object locker = new object();
     long minLocation = long.MaxValue;
+    long totalSeedsChecked = 0;
 
     Parallel.ForEach(seedGroups, new ParallelOptions { MaxDegreeOfParallelism = 8 }, group =>
     {
         Console.WriteLine($"Starting seed group {group.Start}-{group.Start + group.Length}");
+        long seedsChecked = 0;
 
         long seed = group.Start;
         while(seed < group.Start + group.Length)
         {
-            Console.WriteLine($"Group {group.Start}-{group.Start + group.Length} checking seed {seed}");
             State state = new State(seed, "seed");
 
             while (state.Type != "location")
@@ -42,11 +43,18 @@ long GetMinLocation(SeedGroup[] seedGroups, Dictionary<string, Map> mapsBySource
                 }
             }
 
-            Console.WriteLine($"Group {group.Start} skipping {state.NextUsefulIncrement} seeds");
-            seed += state.NextUsefulIncrement == 1 ? 1 : state.NextUsefulIncrement - 1;
+            seed += 1;// state.NextUsefulIncrement == 1 ? 1 : state.NextUsefulIncrement - 1;
+            seedsChecked++;
+        }
+
+        Console.WriteLine($"Group {group.Start} {seedsChecked} seeds checked");
+        lock (locker)
+        {
+            totalSeedsChecked += seedsChecked;
         }
     });
 
+    Console.WriteLine($"{totalSeedsChecked} seeds checked in total");
     return minLocation;
 }
 
