@@ -6,23 +6,71 @@ if (blocks.Count > 2) throw new Exception("Too many blocks");
 var instructions = blocks.First().Single();
 var graph = new Graph(GetNodes(blocks[1]).ToArray());
 
-Console.WriteLine(GetNumberOfMoves());
+var startNodes = graph.GetStartNodes();
 
-long GetNumberOfMoves()
+List<Cycle> cycles = new List<Cycle>();
+Parallel.ForEach(startNodes, startNode =>
 {
-    string currentLocation = "AAA";
-    long moves = 0;
-    while (currentLocation != "ZZZ")
+    Console.WriteLine($"Searching for cycle from {startNode}");
+    var cycle = FindCycle(startNode);
+    Console.WriteLine($"Found cycle for start node {startNode} starting after {cycle.StepsBeforeCycle} with {cycle.StepsInCycle} steps. Exits at {string.Join(",", cycle.StepsToEndNodesInCycle)}");
+    lock (cycles)
     {
-        var index = (int)moves % instructions.Length;
-        var move = instructions[index];
-        Console.Write($"{currentLocation} go {move} to ");
-        currentLocation = graph.GetNextLocation(currentLocation, move);
-        moves++;
-        Console.WriteLine(currentLocation);
+        cycles.Add(cycle);
+    }
+});
+
+var states = cycles.Select(x => new State(x)).ToArray();
+var minDistance = states.Max(s => s.StepsToNextExit);
+
+while (states.Any(s => s.StepsToNextExit < minDistance))
+{
+    foreach (var state in states)
+    {
+        while (state.StepsToNextExit < minDistance)
+        {
+            state.Advance();
+        }
+    }
+    minDistance = states.Max(s => s.StepsToNextExit);
+}
+
+Console.WriteLine(states[0].StepsToNextExit);
+
+
+Cycle FindCycle(string start)
+{
+    HashSet<MovementHistory> history = new HashSet<MovementHistory>();
+    MovementHistory currentState = new MovementHistory(0, start);
+    
+    while (!history.Contains(currentState))
+    {
+        history.Add(currentState);
+        var move = instructions[currentState.InstructionIndex];
+        var nextIndex = currentState.InstructionIndex == instructions.Length - 1
+            ? 0
+            : currentState.InstructionIndex + 1; 
+        currentState = new MovementHistory(nextIndex, graph.GetNextLocation(currentState.Location, move));
+    }
+    
+    var stepsBeforeCycle = 0;
+    while(history.ElementAt(stepsBeforeCycle) != currentState)
+    {
+        stepsBeforeCycle++;
     }
 
-    return moves;
+    return new Cycle(start, stepsBeforeCycle, history.Count - stepsBeforeCycle, GetStepsToEndNodes(history, stepsBeforeCycle).ToArray());
+}
+
+IEnumerable<int> GetStepsToEndNodes(HashSet<MovementHistory> history, int stepsBeforeCycle)
+{
+    for (int i = stepsBeforeCycle; i < history.Count; i++)
+    {
+        if (history.ElementAt(i).Location.EndsWith('Z'))
+        {
+            yield return i - stepsBeforeCycle;
+        }
+    }
 }
 
 IEnumerable<Node> GetNodes(string[] lines)
@@ -53,6 +101,49 @@ IEnumerable<string[]> SplitIntoBlocks(string[] lines)
     yield return result.ToArray();
 }
 
+class State
+{
+    private readonly Cycle _cycle;
+
+    public State(Cycle cycle)
+    {
+        _cycle = cycle;
+        StepsToNextExit = _cycle.StepsBeforeCycle + _cycle.StepsToEndNodesInCycle[0];
+        ExitIndexInCurrentCycle = 0;
+    }
+
+    public void Advance()
+    {
+        if (_cycle.StepsToEndNodesInCycle.Length == 1)
+        {
+            StepsToNextExit += _cycle.StepsInCycle;
+        }
+        else
+        {
+            ExitIndexInCurrentCycle++;
+            if (ExitIndexInCurrentCycle > _cycle.StepsToEndNodesInCycle.Length)
+            {
+                ExitIndexInCurrentCycle = 0;
+                StepsToNextExit += _cycle.StepsInCycle -
+                                   _cycle.StepsToEndNodesInCycle[^1] +
+                                   _cycle.StepsToEndNodesInCycle[0];
+            }
+            else
+            {
+                StepsToNextExit += _cycle.StepsToEndNodesInCycle[ExitIndexInCurrentCycle] -
+                                  _cycle.StepsToEndNodesInCycle[ExitIndexInCurrentCycle - 1];
+            }
+        }
+    }
+
+    public long StepsToNextExit { get; private set; }
+    private long ExitIndexInCurrentCycle { get; set; }
+};
+
+record Cycle(string StartNode, int StepsBeforeCycle, int StepsInCycle, int[] StepsToEndNodesInCycle);
+
+record MovementHistory(int InstructionIndex, string Location);
+
 class Graph
 {
     private HashSet<char> _validMoves = new HashSet<char>() { 'L', 'R' };
@@ -70,6 +161,11 @@ class Graph
         if (!_validMoves.Contains(move)) throw new Exception($"Invalid move {move}");
         if (!_lookup.TryGetValue(currentLocation, out var node)) throw new Exception($"cannot find node {currentLocation}");
         return move == 'L' ? node.Left : node.Right;
+    }
+
+    public string[] GetStartNodes()
+    {
+        return _nodes.Where(n => n.Label.EndsWith('A')).Select(n => n.Label).ToArray();
     }
 }
 
