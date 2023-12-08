@@ -12,7 +12,7 @@ for(var handRank = 1; handRank <= hands.Length; handRank++)
 {
     var hand = hands[handRank - 1];
     hand.Winnings = handRank * hand.Bid;
-    Console.WriteLine($"{hand.Cards} - {hand.Bid} * {handRank} = {hand.Winnings}");
+    Console.WriteLine($"{hand.Cards} - {hand.HandType}-{hand.GetCardRank(0)} - {hand.Bid} * {handRank} = {hand.Winnings}");
 }
 Console.WriteLine(hands.Sum(x => x.Winnings));
 
@@ -51,26 +51,45 @@ record Hand(string Cards, long Bid)
     HandType CalculateHandType()
     {
         var charGroups = Cards.GroupBy(x => x).ToArray();
-        if (charGroups.Length == 1)
+        
+        var groupCount = charGroups.Length;
+        int largestGroup;
+        var handHasNonJokers = charGroups.Any(g => g.Key != 'J');
+
+        if (handHasNonJokers)
+        {
+            largestGroup = charGroups.Where(g => g.Key != 'J').Max(g => g.Count());
+            if (Cards.Contains('J'))
+            {
+                groupCount--;
+                largestGroup += charGroups.Single(g => g.Key == 'J').Count();
+            }
+        }
+        else
+        {
+            largestGroup = 5;
+        }
+
+        if (groupCount == 1)
         {
             return HandType.FiveOfAKind;
         }
-        if (charGroups.Max(g => g.Count() == 4))
+        if (largestGroup == 4)
         {
             return HandType.FourOfAKind;
         }
-        if (charGroups.Max(g => g.Count() == 3))
+        if (largestGroup == 3)
         {
-            if (charGroups.Length == 2)
+            if (groupCount == 2)
             {
                 return HandType.FullHouse;
             }
 
             return HandType.ThreeOfAKind;
         }
-        if (charGroups.Max(g => g.Count() == 2))
+        if (largestGroup == 2)
         {
-            if (charGroups.Length == 3)
+            if (groupCount == 3)
             {
                 return HandType.TwoPair;
             }
@@ -86,16 +105,16 @@ record Hand(string Cards, long Bid)
         { 'A', 13 },
         { 'K', 12 },
         { 'Q', 11 },
-        { 'J', 10 },
-        { 'T', 9 },
-        { '9', 8 },
-        { '8', 7 },
-        { '7', 6 },
-        { '6', 5 },
-        { '5', 4 },
-        { '4', 3 },
-        { '3', 2 },
-        { '2', 1 }
+        { 'T', 10 },
+        { '9', 9 },
+        { '8', 8 },
+        { '7', 7 },
+        { '6', 6 },
+        { '5', 5 },
+        { '4', 4 },
+        { '3', 3 },
+        { '2', 2 },
+        { 'J', 1 },
     };
 }
 
