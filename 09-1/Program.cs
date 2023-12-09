@@ -1,6 +1,6 @@
 ﻿var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\09-1\input.txt");
 
-var nextValues = lines.Select(GetSequence).Select(s => s.CalculateNextValue());
+var nextValues = lines.Select(GetSequence).Select(s => s.CalculatePreviousValue());
 Console.WriteLine(nextValues.Sum());
 
 
@@ -19,6 +19,17 @@ class Sequence
         Values = values;
     }
 
+    public long CalculatePreviousValue()
+    {
+        var nextSequence = GetNextSequence();
+        long previousValue = 0;
+        if (nextSequence.Values.Any(x => x != 0))
+        {
+            previousValue = nextSequence.CalculatePreviousValue();
+        }
+        return Values[0] - previousValue;
+    }
+    
     public long CalculateNextValue()
     {
         var nextSequence = GetNextSequence();
