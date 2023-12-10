@@ -17,7 +17,6 @@ bool StartConnectedWest = locations.Any(l => l.X < start.X);
 bool StartConnectedSouth = locations.Any(l => l.Y > start.Y);
 bool StartConnectedNorth = locations.Any(l => l.Y > start.Y);
 
-
 if (locations.Length > 2)
 {
     throw new Exception("Too many candidates from start");
@@ -92,7 +91,7 @@ if(!DoCrossingsVis) Console.WriteLine(enclosedCount);
 bool PointIsEnclosed(Point p)
 {
     bool vis = false;
-    if (p.X == 69 && p.Y == 58)
+    if (p.X == 31 && p.Y == 54)
     {
         vis = false;
     }
@@ -111,6 +110,15 @@ bool PointIsEnclosed(Point p)
     var crossingsNorth = GetCrossings(p, 0, -1, vis);
     var crossingsSouth = GetCrossings(p, 0, 1, vis);
 
+    if ((crossingsEast + crossingsWest) % 2 != 0)
+    {
+        Console.WriteLine($"Anomaly EW @ {p.X}, {p.Y}. {crossingsEast} + {crossingsWest}");
+    }
+    if ((crossingsNorth + crossingsSouth) % 2 != 0)
+    {
+        Console.WriteLine($"Anomaly NS @ {p.X}, {p.Y}. {crossingsNorth} + {crossingsSouth}");
+    }
+    
     var enclosed = crossingsEast > 0 && crossingsNorth > 0 && crossingsSouth > 0 && crossingsWest > 0 &&
                    (crossingsEast % 2 == 1 || crossingsSouth % 2 == 1 || crossingsWest % 2 == 1 || crossingsNorth % 2 == 1);
 
@@ -135,9 +143,8 @@ int GetCrossings(Point start, int deltaX, int deltaY, bool vis)
         {
             if (deltaX == 0)
             {
-                
-                var thisConnectedNegative = (lines[current.Y][current.X] == 'S' && StartConnectedWest) || ConnectedWest.Contains(lines[current.Y][current.X]);
-                var thisConnectedPositive = (lines[current.Y][current.X] == 'S' && StartConnectedEast) || ConnectedEast.Contains(lines[current.Y][current.X]);
+                var thisConnectedNegative = lines[current.Y][current.X] == 'S' ? StartConnectedWest : ConnectedWest.Contains(lines[current.Y][current.X]);
+                var thisConnectedPositive = lines[current.Y][current.X] == 'S' ? StartConnectedEast : ConnectedEast.Contains(lines[current.Y][current.X]);
                 
                 if (thisConnectedNegative && thisConnectedPositive ||
                     (onPartial && (connectedPositive && thisConnectedNegative) || (connectedNegative && thisConnectedPositive)))
@@ -189,8 +196,8 @@ int GetCrossings(Point start, int deltaX, int deltaY, bool vis)
             
             if (deltaY == 0)
             {
-                var thisConnectedNegative = (lines[current.Y][current.X] == 'S' && StartConnectedNorth) || ConnectedNorth.Contains(lines[current.Y][current.X]);
-                var thisConnectedPositive = (lines[current.Y][current.X] == 'S' && StartConnectedSouth) || ConnectedSouth.Contains(lines[current.Y][current.X]);
+                var thisConnectedNegative = lines[current.Y][current.X] == 'S' ? StartConnectedNorth : ConnectedNorth.Contains(lines[current.Y][current.X]);
+                var thisConnectedPositive = lines[current.Y][current.X] == 'S' ? StartConnectedSouth : ConnectedSouth.Contains(lines[current.Y][current.X]);
 
                 if (thisConnectedNegative && thisConnectedPositive ||
                     (onPartial && (connectedPositive && thisConnectedNegative) || (connectedNegative && thisConnectedPositive)))
