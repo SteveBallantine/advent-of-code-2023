@@ -1,17 +1,28 @@
-﻿using System.Diagnostics;
-using System.Security.Cryptography;
-
-var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\10-1\input.txt");
+﻿var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\10-1\input.txt");
 var width = lines[0].Length;
 
-var start = FindStart();
+Direction[] Directions =
+{
+    new ('N', 0, -1, 'S'),
+    new ('S', 0, 1, 'N'),
+    new ('E', 1, 0, 'W'),
+    new ('W', -1, 0, 'E'),
+};
 
-HashSet<char> ConnectedNorth = new HashSet<char> { 'S', '|', 'L', 'J' };
-HashSet<char> ConnectedSouth = new HashSet<char> { 'S', '|', '7', 'F' };
-HashSet<char> ConnectedEast = new HashSet<char> { 'S', '-', 'L', 'F' };
-HashSet<char> ConnectedWest = new HashSet<char> { 'S', '-', 'J', '7' };
+Dictionary<Direction, HashSet<char>> LabelsConnectingByDirection =
+    new Dictionary<Direction, HashSet<char>>()
+    {
+        { Directions.Single(d => d.Label == 'N'), new HashSet<char> { '|', 'L', 'J' } },
+        { Directions.Single(d => d.Label == 'S'), new HashSet<char> { '|', '7', 'F' } },
+        { Directions.Single(d => d.Label == 'E'), new HashSet<char> { '-', 'L', 'F' } },
+        { Directions.Single(d => d.Label == 'W'), new HashSet<char> { '-', 'J', '7' } },
+    };
 
-var locations = GetAdjacentConnections(start).ToArray();
+Map map = new Map(Directions, LabelsConnectingByDirection, lines.Select(s => s.ToCharArray()).ToArray());
+
+var start = map.FindLabel('S').Single();
+var locations = map.GetAdjacentConnections(start).ToArray();
+
 bool StartConnectedEast = locations.Any(l => l.X > start.X);
 bool StartConnectedWest = locations.Any(l => l.X < start.X);
 bool StartConnectedSouth = locations.Any(l => l.Y > start.Y);
@@ -30,17 +41,18 @@ while (locationA != locationB &&
        !history.Contains(locationA) && 
        !history.Contains(locationB))
 {
-    var options = GetAdjacentConnections(locationA);
+    var options = map.GetAdjacentConnections(locationA);
     var next = options.Single(x => !history.Contains(x));
     history.Add(locationA);
     locationA = next;
     
-    options = GetAdjacentConnections(locationB);
+    options = map.GetAdjacentConnections(locationB);
     next = options.Single(x => !history.Contains(x));
     history.Add(locationB);
     locationB = next;
 }
 history.Add(locationA);
+
 
 bool DoCrossingsVis = false;
 
@@ -143,8 +155,8 @@ int GetCrossings(Point start, int deltaX, int deltaY, bool vis)
         {
             if (deltaX == 0)
             {
-                var thisConnectedNegative = lines[current.Y][current.X] == 'S' ? StartConnectedWest : ConnectedWest.Contains(lines[current.Y][current.X]);
-                var thisConnectedPositive = lines[current.Y][current.X] == 'S' ? StartConnectedEast : ConnectedEast.Contains(lines[current.Y][current.X]);
+                var thisConnectedNegative = lines[current.Y][current.X] == 'S' ? StartConnectedWest : LabelsConnectingByDirection[Directions.Single(x => x.Label == 'W')].Contains(lines[current.Y][current.X]);
+                var thisConnectedPositive = lines[current.Y][current.X] == 'S' ? StartConnectedEast : LabelsConnectingByDirection[Directions.Single(x => x.Label == 'E')].Contains(lines[current.Y][current.X]);
                 
                 if (thisConnectedNegative && thisConnectedPositive ||
                     (onPartial && (connectedPositive && thisConnectedNegative) || (connectedNegative && thisConnectedPositive)))
@@ -196,8 +208,8 @@ int GetCrossings(Point start, int deltaX, int deltaY, bool vis)
             
             if (deltaY == 0)
             {
-                var thisConnectedNegative = lines[current.Y][current.X] == 'S' ? StartConnectedNorth : ConnectedNorth.Contains(lines[current.Y][current.X]);
-                var thisConnectedPositive = lines[current.Y][current.X] == 'S' ? StartConnectedSouth : ConnectedSouth.Contains(lines[current.Y][current.X]);
+                var thisConnectedNegative = lines[current.Y][current.X] == 'S' ? StartConnectedNorth : LabelsConnectingByDirection[Directions.Single(x => x.Label == 'N')].Contains(lines[current.Y][current.X]);
+                var thisConnectedPositive = lines[current.Y][current.X] == 'S' ? StartConnectedSouth : LabelsConnectingByDirection[Directions.Single(x => x.Label == 'S')].Contains(lines[current.Y][current.X]);
 
                 if (thisConnectedNegative && thisConnectedPositive ||
                     (onPartial && (connectedPositive && thisConnectedNegative) || (connectedNegative && thisConnectedPositive)))
@@ -253,91 +265,78 @@ int GetCrossings(Point start, int deltaX, int deltaY, bool vis)
 }
 
 
-Point FindStart()
-{
-    for (var y = 0; y < lines.Length; y++)
-    {
-        if (lines[y].Length != width)
-        {
-            throw new Exception($"unexpected line width {lines[y].Length} chars in line {y} vs expected {width} chars");
-        }
+record Direction(char Label, int DeltaX, int DeltaY, char OppositeDirectionLabel);
 
-        for (var x = 0; x < width; x++)
+
+class Map
+{
+    private readonly char[][] _locations;
+    private readonly Dictionary<char, Direction> _directions;
+    private readonly Dictionary<Direction, HashSet<char>> _connectingLabelsByDirection;
+    
+    public Map(Direction[] directions, Dictionary<Direction, HashSet<char>> connectingLabelsByDirection, char[][] locations)
+    {
+        _directions = directions.ToDictionary(d => d.Label, d => d);
+        _connectingLabelsByDirection = connectingLabelsByDirection;
+        _locations = locations;
+        var width = locations[0].Length;
+        if (locations.Any(x => x.Length != width))
         {
-            if (lines[y][x] == 'S')
+            throw new Exception("All lines do not have same width");
+        }
+    }
+
+    public IEnumerable<Point> FindLabel(char label)
+    {
+        for (var y = 0; y < _locations.Length; y++)
+        {
+            for (var x = 0; x < _locations[0].Length; x++)
             {
-                return new Point(x, y);
+                if (_locations[y][x] == label)
+                {
+                    yield return new Point(x, y);
+                }
             }
         }
     }
-
-    throw new Exception("No Start!");
-}
-
-
-IEnumerable<Point> GetAdjacentConnections(Point p)
-{
-    if (p.X < width - 1)
+    
+    public IEnumerable<Point> GetAdjacentConnections(Point p)
     {
-        var east = new Point(p.X + 1, p.Y);
-        if (AreConnected(p, east))
+        foreach (var point in GetAdjacentPoints(p)
+                     .Where(AreConnected))
         {
-            yield return east;
+            yield return point.B;
         }
-    }
-
-    if (p.X > 0)
-    {
-        var west = new Point(p.X - 1, p.Y);
-        if (AreConnected(p, west))
-        {
-            yield return west;
-        }
-    }
-
-    if (p.Y < lines.Length - 1)
-    {
-        var south = new Point(p.X, p.Y + 1);
-        if (AreConnected(p, south))
-        {
-            yield return south;
-        }
-    }
-
-    if (p.Y > 0)
-    {
-        var north = new Point(p.X, p.Y - 1);
-        if (AreConnected(p, north))
-        {
-            yield return north;
-        }
-    }
-}
-
-bool AreConnected(Point p1, Point p2)
-{
-    // Should really check for adjacency...
-    var char1 = lines[p1.Y][p1.X];
-    var char2 = lines[p2.Y][p2.X];
-
-    if (p1.X == p2.X)
-    {
-        if (p1.Y > p2.Y)
-        {
-            // P2 is North of P1
-            return ConnectedNorth.Contains(char1) && ConnectedSouth.Contains(char2);
-        }
-        // P2 is South of P1
-        return ConnectedSouth.Contains(char1) && ConnectedNorth.Contains(char2);
     }
     
-    if (p1.X > p2.X)
+    private bool AreConnected(PointPair points)
     {
-        // P2 is West of P1
-        return ConnectedWest.Contains(char1) && ConnectedEast.Contains(char2);
+        var (p1, p2, direction) = points;
+        var label1 = _locations[p1.Y][p1.X];
+        var label2 = _locations[p2.Y][p2.X];
+
+        return (_connectingLabelsByDirection[direction].Contains(label1) || label1 == 'S') &&
+               (_connectingLabelsByDirection[_directions[direction.OppositeDirectionLabel]].Contains(label2) || label2 == 'S');
     }
-    // P1 is East of P2
-    return ConnectedEast.Contains(char1) && ConnectedWest.Contains(char2);
+
+    private PointPair? GetNextPointInDirection(Direction d, Point p)
+    {
+        var nextPoint = new Point(p.X + d.DeltaX, p.Y + d.DeltaY);
+        return PointIsInBounds(nextPoint) ? new PointPair(p, nextPoint, d) : null;
+    }
+    
+    private bool PointIsInBounds(Point p)
+    {
+        return p.X >= 0 && p.X < _locations[0].Length &&
+               p.Y >= 0 && p.Y < _locations.Length;
+    }
+    
+    private IEnumerable<PointPair> GetAdjacentPoints(Point p)
+    {
+        return _directions.Select(d => GetNextPointInDirection(d.Value, p)).Where(x => x is not null);
+    }
 }
+
+record PointPair(Point A, Point B, Direction DirectionFromAToB);
 
 record Point(int X, int Y);
