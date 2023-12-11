@@ -1,68 +1,10 @@
-﻿var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\11-1\test-input1.txt");
-var width = lines[0].Length;
-
-Direction[] Directions =
-{
-    new ('N', 0, -1, 'S'),
-    new ('S', 0, 1, 'N'),
-    new ('E', 1, 0, 'W'),
-    new ('W', -1, 0, 'E'),
-};
-
-Map map = new Map(Directions, lines.Select(s => s.ToCharArray()).ToArray());
+﻿var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\11-1\input.txt");
+Map map = new Map(lines.Select(s => s.ToCharArray()).ToArray());
 
 var emptyRows = map.GetRowsWithAllLabel('.').ToArray();
 var emptyCols = map.GetColumnsWithAllLabel('.').ToArray();
 
-var expanded = new char[lines.Length + emptyRows.Length][];
-var emptyLine = new char[lines[0].Length + emptyCols.Length];
-for (int i = 0; i < emptyLine.Length; i++)
-{
-    emptyLine[i] = '.';
-}
-
-int expandedICount = 0;
-for (int i = 0; i < expanded.Length; i++)
-{
-    var oldY = i - expandedICount;
-
-    if (emptyRows.Contains(oldY))
-    {
-        expanded[i] = emptyLine;
-        expanded[i + 1] = emptyLine;
-        i++;
-        expandedICount++;
-    }
-    else
-    {
-        expanded[i] = new char[lines[0].Length + emptyCols.Length];
-        int expandedJCount = 0;
-        for (int j = 0; j < expanded[i].Length; j++)
-        {
-            var oldX = j - expandedJCount;
-            if (emptyCols.Contains(oldX))
-            {
-                expanded[i][j] = '.';
-                expanded[i][j + 1] = '.';
-                j++;
-                expandedJCount++;
-            }
-            else
-            {
-                expanded[i][j] = lines[oldY][oldX];
-            }
-        }
-    }
-}
-
-foreach (var line in expanded)
-{
-    Console.WriteLine(line);
-}
-
-var expandedMap = new Map(Directions, expanded);
-
-var galaxies = expandedMap.FindLabel('#').ToArray();
+var galaxies = map.FindLabel('#').ToArray();
 Console.WriteLine($"{galaxies.Length} galaxies");
 
 var allPairs = galaxies.SelectMany(a => galaxies
@@ -86,23 +28,32 @@ var distances = realPairs.Select(GetDistance);
 Console.WriteLine(distances.Sum());
 
 
-int GetDistance(PointPair pair)
+long GetDistance(PointPair pair)
 {
     int dXn = Math.Abs(pair.A.X - pair.B.X);
     int dYn = Math.Abs(pair.A.Y - pair.B.Y);
-    return dXn + dYn;
-}
 
-record Direction(char Label, int DeltaX, int DeltaY, char OppositeDirectionLabel);
+    var largerX = pair.A.X > pair.B.X ? pair.A.X : pair.B.X;
+    var smallerX = pair.A.X < pair.B.X ? pair.A.X : pair.B.X;
+    var largerY = pair.A.Y > pair.B.Y ? pair.A.Y : pair.B.Y;
+    var smallerY = pair.A.Y < pair.B.Y ? pair.A.Y : pair.B.Y;
+
+    var expandedColCrossings = Enumerable.Range(smallerX, largerX - smallerX).Count(n => emptyCols.Contains(n));
+    var expandedRowCrossings = Enumerable.Range(smallerY, largerY - smallerY).Count(n => emptyRows.Contains(n));
+    var multiplier = 999999;
+
+    long ans = dXn + dYn + (expandedColCrossings + expandedRowCrossings) * multiplier;
+    //Console.WriteLine($"{pair.A.X},{pair.A.Y} - {pair.B.X},{pair.B.Y} x {expandedColCrossings},{expandedRowCrossings} = {ans}");
+    
+    return ans;
+}
 
 class Map
 {
     private readonly char[][] _locations;
-    private readonly Dictionary<char, Direction> _directions;
     
-    public Map(Direction[] directions, char[][] locations)
+    public Map(char[][] locations)
     {
-        _directions = directions.ToDictionary(d => d.Label, d => d);
         _locations = locations;
         var width = locations[0].Length;
         if (locations.Any(x => x.Length != width))
