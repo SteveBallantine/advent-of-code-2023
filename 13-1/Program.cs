@@ -20,7 +20,6 @@ foreach (var block in blocks)
 
     var colMap = ConvertToIntArray(columns);
     var rowMap = ConvertToIntArray(rows);
-    Console.WriteLine("row map");
 
     var rPoint = FindReflectionPoint(colMap);
     if (rPoint != null)
@@ -66,18 +65,24 @@ int? FindReflectionPoint(int[] data)
         int checkPoint1Offset = 0;
         int checkPoint2Offset = 1;
         bool hit = false;
+        bool hasMatchWithBitFlip = false;
         
         while (
             i + checkPoint1Offset >= 0 &&
             i + checkPoint2Offset < data.Length &&
-            data[i + checkPoint1Offset] == data[i + checkPoint2Offset])
+            (data[i + checkPoint1Offset] == data[i + checkPoint2Offset] ||
+            HasMatchWithBitFlip(data[i + checkPoint1Offset], data[i + checkPoint2Offset])))
         {
+            if (HasMatchWithBitFlip(data[i + checkPoint1Offset], data[i + checkPoint2Offset]))
+            {
+                hasMatchWithBitFlip = true;
+            }
             checkPoint1Offset--;
             checkPoint2Offset++;
             hit = true;
         }
 
-        if (hit && (i + checkPoint1Offset < 0 || i + checkPoint2Offset >= data.Length))
+        if (hit && hasMatchWithBitFlip && (i + checkPoint1Offset < 0 || i + checkPoint2Offset >= data.Length))
         {
             return i + 1;
         }
@@ -86,6 +91,17 @@ int? FindReflectionPoint(int[] data)
     return null;
 }
 
+bool HasMatchWithBitFlip(int a, int b)
+{
+    for (int flip = 0; flip < 24; flip++)
+    {
+        int z = a;
+        z ^= 1 << flip;
+        if (z == b) return true;
+    }
+
+    return false;
+}
 
 int[] ConvertToIntArray(char[][] data)
 {
