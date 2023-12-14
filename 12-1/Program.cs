@@ -1,63 +1,124 @@
-﻿var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\12-1\input.txt");
+﻿using System.Diagnostics;
 
-//var lines = new string[] { "#.#.### 1,1,3" }; // 1
-//var lines = new string[] { ".??..??...?##. 1,1,3" }; // 4
-//var lines = new string[] { "?#?#?#?#?#?#?#? 1,3,1,6" }; // 1
-//var lines = new string[] { "?###???????? 3,2,1" }; // 10
-//var lines = new string[] { "?????.?#???? 1,2,1,1" }; // 14
-//var lines = new string[] { "???.##??##???#??.# 1,1,7,1,1,1" }; // 1
-//var lines = new string[] { "???#??#.##. 2,1,2" }; // 2
+AssertFor(new [] { "#.#.### 1,1,3" }, 1);
+AssertFor(new [] { ".??..??...?##. 1,1,3" }, 4); 
+AssertFor(new [] { "?#?#?#?#?#?#?#? 1,3,1,6" }, 1); 
+AssertFor(new [] { "?###???????? 3,2,1" }, 10); 
+AssertFor(new [] { "?????.?#???? 1,2,1,1" }, 14); 
+AssertFor(new [] { "???.##??##???#??.# 1,1,7,1,1,1" }, 1); 
+AssertFor(new [] { "???#??#.##. 2,1,2" }, 2); 
+AssertFor(new []
+    { ".??..??...?##.?.??..??...?##. 1,1,3,1,1,3" }, 32); 
+AssertFor(new []
+    { ".??..??...?##.?.??..??...?##.?.??..??...?##.?.??..??...?##.?.??..??...?##. 1,1,3,1,1,3,1,1,3,1,1,3,1,1,3" }, 16384);
+AssertFor(new []
+    { "?###??????????###??????????###???????? 3,2,1,3,2,1,3,2,1" }, 2250);
+AssertFor(new []
+    { "?###??????????###??????????###??????????###??????????###???????? 3,2,1,3,2,1,3,2,1,3,2,1,3,2,1" }, 506250);
+AssertFor(new []
+    { "?????.??????.?????????????.??????.?????????????.??????.?????????????.??????.?????????????.??????.??????? 3,2,1,1,1,2,3,2,1,1,1,2,3,2,1,1,1,2,3,2,1,1,1,2,3,2,1,1,1,2" }, 4831394944410);
 
-var c = 0;
-foreach (var line in lines)
+var testInput = @"???.### 1,1,3
+.??..??...?##. 1,1,3
+?#?#?#?#?#?#?#? 1,3,1,6
+????.#...#... 4,1,1
+????.######..#####. 1,6,5
+?###???????? 3,2,1";
+var testLines = testInput.Split(System.Environment.NewLine);
+
+AssertFor(testLines, 21); 
+AssertFor(RepeatFiveTimes(testLines).ToArray(), 525152); 
+
+
+var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\12-1\input.txt");
+Console.WriteLine(RunFor(RepeatFiveTimes(lines).ToArray(), true));
+
+void AssertFor(string[] lines, long expectedValue)
+{
+    var result = RunFor(lines, false);
+    foreach (var line in lines)
+    {
+        Console.WriteLine(line);
+    }
+    Console.WriteLine($"Expected {expectedValue}. Actual {result}");
+    if (result != expectedValue)
+    {
+        throw new Exception("Fail");
+    }
+}
+
+IEnumerable<string> RepeatFiveTimes(string[] lines)
+{
+    foreach (var line in lines)
+    {
+        var parts = line.Split(' ');
+        var tmp = new [] { parts[0], parts[0], parts[0], parts[0], parts[0] };
+        var tmp2 = new [] { parts[1], parts[1], parts[1], parts[1], parts[1] };
+        yield return string.Join('?', tmp) + " " + string.Join(',', tmp2);
+    }
+}
+
+long RunFor(string[] lines, bool logging)
+{
+    long c = 0;
+    foreach (var line in lines)
+    {
+        var variations = GetVariationsForLine(line, false, logging);
+        c += variations;
+        if (logging)
+        {
+            Console.WriteLine($"{variations} for {line}");
+        }
+    }
+    return c;
+}
+
+long GetVariationsForLine(string line, bool verify, bool logging)
 {
     var parts = line.Split(' ');
+    var cache = new Dictionary<(int, int, bool), long>();
     
     var finalBlockSizes = parts[1]
         .Split(',', StringSplitOptions.RemoveEmptyEntries)
         .Select(int.Parse)
         .ToArray();
-    
-    var variations = GetVariations(parts[0], finalBlockSizes);
-    Console.WriteLine($"{variations} for {line}");
-    c += variations;
+    return GetVariations(parts[0], finalBlockSizes, cache, verify, logging);
 }
-Console.WriteLine(c);
 
-int GetVariations(string line, int[] finalBlockSizes)
+long GetVariations(string line, int[] finalBlockSizes, Dictionary<(int, int, bool), long> cache, bool verify, bool logging)
 {
     int[] startingPositions = GetStartingPositions(line, finalBlockSizes);
     var distanceToAffectBlocks = Enumerable.Range(0, startingPositions.Length)
         .ToDictionary(i => i, i => DistanceToAffectNextBlocks(i, finalBlockSizes, startingPositions).ToArray());
-    Console.WriteLine($"Starting positions for {line} {string.Join(',', startingPositions)}");
+    //Console.WriteLine($"Starting positions for {line} {string.Join(',', startingPositions)}");
 
-    if (startingPositions[^1] == 0)
+    if (startingPositions.Length > 1 && startingPositions[^1] == 0)
     {
         throw new Exception($"No matching positions for {line} {string.Join(',', finalBlockSizes)}");
     }
 
-    return CountVariations(line, finalBlockSizes, startingPositions, distanceToAffectBlocks);
+    return CountVariations(line, finalBlockSizes, startingPositions, distanceToAffectBlocks, cache, verify, logging);
 }
 
-int CountVariations(string line, int[] finalBlockSizes, int[] startingPositions,
-    Dictionary<int, int[]> connectedBlocks)
+long CountVariations(string line, int[] finalBlockSizes, int[] startingPositions,
+    Dictionary<int, int[]> connectedBlocks, Dictionary<(int, int, bool), long> cache, bool verify, bool logging)
 {
-    return CountVariationsAtIndex(line, finalBlockSizes, startingPositions, connectedBlocks, 0, new int[startingPositions.Length]);
+    return CountVariationsAtIndex(line, finalBlockSizes, startingPositions, connectedBlocks, 0, new int[startingPositions.Length], cache, verify, logging);
 }
 
-int CountVariationsAtIndex(string line, int[] finalBlockSizes, int[] startingPositions, Dictionary<int, int[]> distanceToAffectBlocks, int indexToVary, int[] variations)
+long CountVariationsAtIndex(string line, int[] finalBlockSizes, int[] startingPositions, Dictionary<int, int[]> distanceToAffectBlocks, int indexToVary, int[] variations, Dictionary<(int, int, bool), long> cache, bool verify, bool logging)
 {
-    int count = 0;
+    long count = 0;
     bool continueSearching = true;
     while (continueSearching)
     {
         continueSearching = false;
-
         var validity = IsVariationValid(line, finalBlockSizes, startingPositions, variations, indexToVary);
+
         switch (validity)
         {
             case Validity.Valid:
-                int subCount = 0;
+                long subCount = 0;
                 if (indexToVary >= finalBlockSizes.Length - 1)
                 {
                     subCount++;
@@ -65,7 +126,24 @@ int CountVariationsAtIndex(string line, int[] finalBlockSizes, int[] startingPos
                 }
                 else
                 {
-                    subCount += CountVariationsAtIndex(line, finalBlockSizes, startingPositions, distanceToAffectBlocks, indexToVary + 1, variations.Clone() as int[]);
+                    var key = (indexToVary + 1, variations[indexToVary + 1], true);
+                    if (cache.TryGetValue(key, out long v))
+                    {
+                        //Console.WriteLine($"cache hit: {key} = {v} for {string.Join(',', Enumerable.Range(0, finalBlockSizes.Length).Select(i => startingPositions[i] + variations[i]))}");
+                        subCount += v;                      
+                        if (verify)
+                        {
+                            Verify(v, line, finalBlockSizes, startingPositions, indexToVary + 1, variations);
+                        }
+                    }
+                    else
+                    {
+                        var vCount = CountVariationsAtIndex(line, finalBlockSizes, startingPositions,
+                            distanceToAffectBlocks, indexToVary + 1, variations.Clone() as int[], cache, verify, logging);
+                        //Console.WriteLine($"Add cache entry: {key} = {vCount} for {string.Join(',', Enumerable.Range(0, finalBlockSizes.Length).Select(i => startingPositions[i] + variations[i]))} => {GetSubLineForPosition(line, finalBlockSizes, startingPositions, indexToVary, variations)}");
+                        cache.Add(key, vCount);
+                        subCount += vCount;
+                    }
                 }
                 count+=subCount;
                 continueSearching = true;
@@ -74,7 +152,36 @@ int CountVariationsAtIndex(string line, int[] finalBlockSizes, int[] startingPos
                 //Console.WriteLine($"Might have valid children: {string.Join(',', Enumerable.Range(0, finalBlockSizes.Length).Select(i => startingPositions[i] + variations[i]))}");
                 if (indexToVary < finalBlockSizes.Length - 1)
                 {
-                    count += CountVariationsAtIndex(line, finalBlockSizes, startingPositions, distanceToAffectBlocks, indexToVary + 1, variations.Clone() as int[]);
+                    var nextLevelIsValid = IsVariationValid(line, finalBlockSizes, startingPositions, variations,
+                        indexToVary + 1);
+                    var useCache = nextLevelIsValid == Validity.Valid || nextLevelIsValid == Validity.InvalidButValidBeforeLimit;
+
+                    var key = (indexToVary + 1, variations[indexToVary + 1], false);
+                    if (useCache && cache.TryGetValue(key, out long v))
+                    {                            
+                        if (verify)
+                        {
+                            Verify(v, line, finalBlockSizes, startingPositions, indexToVary + 1, variations);
+                        }
+                        if (v > 0)
+                        {
+                            //Console.WriteLine($"cache hit: {key} = {v} for {string.Join(',', Enumerable.Range(0, finalBlockSizes.Length).Select(i => startingPositions[i] + variations[i]))}");
+                        }
+
+                        count += v;
+                    }
+                    else
+                    {
+                        var vCount = CountVariationsAtIndex(line, finalBlockSizes, startingPositions,
+                            distanceToAffectBlocks, indexToVary + 1, variations.Clone() as int[], cache, verify, logging);
+
+                        if (useCache)
+                        {
+                            cache.Add(key, vCount);
+                            //Console.WriteLine($"Add cache entry: {key} = {vCount} for {string.Join(',', Enumerable.Range(0, finalBlockSizes.Length).Select(i => startingPositions[i] + variations[i]))} => {GetSubLineForPosition(line, finalBlockSizes, startingPositions, indexToVary, variations)}");
+                        }
+                        count += vCount;
+                    }
                 }
                 continueSearching = true;
                 break;
@@ -103,6 +210,26 @@ int CountVariationsAtIndex(string line, int[] finalBlockSizes, int[] startingPos
     return count;
 }
 
+string GetSubLineForPosition(string line, int[] finalBlockSizes, int[] startingPositions,
+    int indexToVary, int[] variations)
+{
+    int start = startingPositions[indexToVary] + variations[indexToVary];
+    string testLine = line.Substring(start, line.Length - start);
+    int[] testBlocks = finalBlockSizes.Skip(indexToVary).ToArray();
+    return $"{testLine} {string.Join(',', testBlocks)}";
+}
+
+void Verify(long calculatedValue, string line, int[] finalBlockSizes, int[] startingPositions, int indexToVary, int[] variations)
+{
+    if (calculatedValue > 0)
+    {
+        var subLine = GetSubLineForPosition(line, finalBlockSizes, startingPositions, indexToVary, variations);
+        var subResult = GetVariationsForLine(subLine, false, false);
+        Debug.Assert(subResult == calculatedValue);
+        //Console.WriteLine($"Verified {subResult} = {calculatedValue}");
+    }
+}
+
 IEnumerable<int> DistanceToAffectNextBlocks(int index, int[] finalBlockSizes, int[] startingPositions)
 {
     int maxConnectedDistanceFromIndex = finalBlockSizes[index] + 1;
@@ -121,7 +248,7 @@ Validity IsVariationValid(string line, int[] finalBlockSizes, int[] startingPosi
     for (int i = 0; i < finalBlockSizes.Length; i++)
     {
         var validity = IsValidAtPosition(line, startingPositions[i] + variations[i], finalBlockSizes[i]);
-        if (validity == Validity.Invalid && i > limit && result < Validity.InvalidButValidBeforeLimit)
+        if (validity == Validity.Invalid && i > limit && result == Validity.Valid)
         {
             result = Validity.InvalidButValidBeforeLimit;
         }
@@ -137,8 +264,10 @@ Validity IsVariationValid(string line, int[] finalBlockSizes, int[] startingPosi
 
     var hashCoverageResult = AllHashesCovered(line, finalBlockSizes,
         Enumerable.Range(0, finalBlockSizes.Length).Select(i => startingPositions[i] + variations[i]).ToArray(), limit);
-    if (hashCoverageResult > result)
-    {        
+    if ((hashCoverageResult > result || 
+        hashCoverageResult == Validity.Invalid && result == Validity.InvalidButValidBeforeLimit) &&
+        !(hashCoverageResult == Validity.InvalidButValidBeforeLimit && result == Validity.Invalid))
+    {
         result = hashCoverageResult;
     }
     
