@@ -1,7 +1,4 @@
-﻿using System.Collections;
-using System.Text.RegularExpressions;
-
-var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\13-1\input.txt");
+﻿var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\13-1\input.txt");
 var blocks = BreakIntoMaps(lines);
 
 var result = 0l;
