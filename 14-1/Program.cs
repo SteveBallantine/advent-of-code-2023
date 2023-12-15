@@ -33,7 +33,7 @@ long RunFor(string[] input)
     Dictionary<int, long> history = new Dictionary<int, long>();
     int currentState = map.GetHashCode();
     int c = 0;
-    //DisplayMap(map);
+    //map.LogToConsole();
     
     while (!history.ContainsKey(currentState))
     {
@@ -45,7 +45,7 @@ long RunFor(string[] input)
             map.TiltInDirection(d);
         }
         //Console.WriteLine(c);
-        //DisplayMap(map);
+        //map.LogToConsole();
         
         currentState = map.GetHashCode();
     }
@@ -81,15 +81,6 @@ long RunFor(string[] input)
     return historyList[historyIndex + leadIn].Value;
 }
 
-void DisplayMap(Map m)
-{
-    foreach (var r in m.GetRows())
-    {
-        Console.WriteLine(new string(r));
-    }
-}
-
-
 long GetLoad(Map map)
 {
     long total = 0;
@@ -121,26 +112,6 @@ class Map
 {
     private readonly char[][] _locations;
 
-    public override int GetHashCode()
-    {
-        int x = 0;
-        int count = 0;
-        foreach (var entry in _locations)
-        {
-            foreach (var ch in entry)
-            {
-                count++;
-                x ^= ch.GetHashCode() * count;
-            }
-        }
-        return x;
-    }
-
-    public char[][] GetRows()
-    {
-        return _locations;
-    }
-
     public Map(char[][] locations)
     {
         _locations = locations;
@@ -148,6 +119,14 @@ class Map
         if (locations.Any(x => x.Length != width))
         {
             throw new Exception("All lines do not have same width");
+        }
+    }
+
+    public void LogToConsole()
+    {
+        foreach (var r in _locations)
+        {
+            Console.WriteLine(new string(r));
         }
     }
     
@@ -269,6 +248,21 @@ class Map
                 }
             }
         }
+    }
+    
+    public override int GetHashCode()
+    {
+        int x = 0;
+        int count = 0;
+        foreach (var entry in _locations)
+        {
+            foreach (var ch in entry)
+            {
+                count++;
+                x ^= ch.GetHashCode() * count;
+            }
+        }
+        return x;
     }
 }
 
