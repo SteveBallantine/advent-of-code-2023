@@ -1,4 +1,5 @@
-﻿using System.Threading.Channels;
+﻿using System.ComponentModel.DataAnnotations;
+using System.Threading.Channels;
 
 Direction[] directions =
 {
@@ -21,26 +22,50 @@ AssertFor(@".|...\....
 ..../.\\..
 .-.-/..|..
 .|....-|.\
-..//.|....", 46);
+..//.|....", 51);
 
 var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\16-1\input.txt");
 Console.WriteLine(RunFor(lines, true));
 
 long RunFor(string[] input, bool logging)
 {
-    var map = CreateMap(input);
-    map.StartBeam(new Beam(new Point(0, 0), e));
+    int max = 0;
+    
+    for (int x = 0; x < input[0].Length; x++)
+    {
+        var map = CreateMap(input);
+        map.StartBeam(new Beam(new Point(x, 0), s));
+        if (map.GetEnergizedCount > max) max = map.GetEnergizedCount;
+        
+        var map2 = CreateMap(input);
+        map2.StartBeam(new Beam(new Point(x, map2.Height - 1), n));
+        if (map2.GetEnergizedCount > max) max = map2.GetEnergizedCount;
+    }
+    for (int y = 0; y < input.Length; y++)
+    {
+        var map = CreateMap(input);
+        map.StartBeam(new Beam(new Point(0, y), e));
+        if (map.GetEnergizedCount > max) max = map.GetEnergizedCount;
+        
+        var map2 = CreateMap(input);
+        map2.StartBeam(new Beam(new Point(map.Width - 1, y), w));
+        if (map2.GetEnergizedCount > max) max = map2.GetEnergizedCount;
+    }
 
-    foreach (var line in map.GetEnergized)
+    /*var map = CreateMap(input);
+    map.StartBeam(new Beam(new Point(0, 0), e));
+    max = map.GetEnergizedCount;*/
+    
+    /*foreach (var line in map.GetEnergized)
     {
         foreach (var point in line)
         {
             Console.Write(point ? '#' : '.');
         }
         Console.WriteLine();
-    }
+    }*/
 
-    return map.GetEnergizedCount;
+    return max;
 }
 
 void AssertFor(string input, long expectedResult)
@@ -99,6 +124,9 @@ class Map
     private readonly bool[][] _energized;
     private readonly HashSet<Direction>[][] _entryDirections;
     
+    public int Width => _locations[0].Length;
+    public int Height => _locations.Length;
+    
     public Map(Direction[] directions, Dictionary<(char, Direction), Direction[]> labelBeamDirectionChanges, char[][] locations)
     {
         _directions = directions.ToDictionary(d => d.Label, d => d);
@@ -110,13 +138,13 @@ class Map
             throw new Exception("All lines do not have same width");
         }
 
-        _energized = new bool[_locations.Length][];
-        _entryDirections = new HashSet<Direction>[_locations.Length][];
-        for(int i = 0; i < _locations.Length; i++)
+        _energized = new bool[Height][];
+        _entryDirections = new HashSet<Direction>[Height][];
+        for(int i = 0; i < Height; i++)
         {
-            _energized[i] = new bool[_locations[0].Length];
-            _entryDirections[i] = new HashSet<Direction>[_locations[0].Length];
-            for(int j = 0; j < _locations[0].Length; j++)
+            _energized[i] = new bool[Width];
+            _entryDirections[i] = new HashSet<Direction>[Width];
+            for(int j = 0; j < Width; j++)
             {
                 _entryDirections[i][j] = new HashSet<Direction>();
             }
@@ -163,9 +191,9 @@ class Map
 
     public IEnumerable<Point> FindLabel(char label)
     {
-        for (var y = 0; y < _locations.Length; y++)
+        for (var y = 0; y < Height; y++)
         {
-            for (var x = 0; x < _locations[0].Length; x++)
+            for (var x = 0; x < Width; x++)
             {
                 if (_locations[y][x] == label)
                 {
@@ -183,8 +211,8 @@ class Map
     
     private bool PointIsInBounds(Point p)
     {
-        return p.X >= 0 && p.X < _locations[0].Length &&
-               p.Y >= 0 && p.Y < _locations.Length;
+        return p.X >= 0 && p.X < Width &&
+               p.Y >= 0 && p.Y < Height;
     }
     
     private IEnumerable<PointPair> GetAdjacentPoints(Point p)
