@@ -1,6 +1,4 @@
-﻿using System.Dynamic;
-
-AssertFor(@"px{a<2006:qkq,m>2090:A,rfg}
+﻿AssertFor(@"px{a<2006:qkq,m>2090:A,rfg}
 pv{a>1716:R,A}
 lnx{m>1548:A,A}
 rfg{s<537:gd,x>2440:R,A}
@@ -16,7 +14,7 @@ hdj{m>838:A,pv}
 {x=1679,m=44,a=2067,s=496}
 {x=2036,m=264,a=79,s=2244}
 {x=2461,m=1339,a=466,s=291}
-{x=2127,m=1623,a=2188,s=1013}", 19114);
+{x=2127,m=1623,a=2188,s=1013}", 167409079868000);
 
 var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\19-1\input.txt");
 Console.WriteLine(RunFor(lines, true));
@@ -31,22 +29,7 @@ long RunFor(string[] input, bool logging)
         workflows.Add(Workflow.Parse(entry));
     }
     
-    List<Dictionary<string, int>> toys = new();
-    foreach (var entry in blocks[1])
-    {
-        toys.Add(ParseToy(entry));
-    }
-
-    int result = 0;
-    foreach (var toy in GetAcceptedToys(workflows.ToArray(), toys.ToArray()))
-    {
-        foreach (var property in toy)
-        {
-            result += property.Value;
-        }
-    }
-    
-    return result;
+    return GetCombos(workflows.ToArray());
 }
 
 void AssertFor(string input, long expectedResult)
@@ -63,24 +46,123 @@ void AssertFor(string input, long expectedResult)
     }
 }
 
-IEnumerable<Dictionary<string, int>> GetAcceptedToys(Workflow[] rawWorkflows, Dictionary<string, int>[] toys)
+long GetCombos(Workflow[] workflows)
 {
-    var workflows = rawWorkflows.ToDictionary(w => w.Label, w => w);
+    var result = 0l;
+    var paths = GetPathsToAcceptance(workflows).ToArray();
 
-    foreach (var toy in toys)
+    List<Dictionary<string, Range>> countedRanges = new List<Dictionary<string, Range>>();
+    foreach (var path in paths)
     {
-        string nextStop = "in";
-        while (nextStop != "R" && nextStop != "A")
-        {
-            nextStop = workflows[nextStop].GetNext(toy);
-        }
+        var valueRanges = GetValidValueRanges(path);
+        long combos = CountCombos(valueRanges);
+        //combos -= GetDuplicateCombos(valueRanges, completed);
+        countedRanges.Add(valueRanges);
 
-        if (nextStop == "A")
+        result += combos;
+    }
+    
+    return result;
+}
+
+long CountCombos(Dictionary<string, Range> ranges)
+{
+    var diffX = (long)(ranges["x"].Max - ranges["x"].Min) + 1;
+    var diffM = (long)(ranges["m"].Max - ranges["m"].Min) + 1;
+    var diffA = (long)(ranges["a"].Max - ranges["a"].Min) + 1;
+    var diffS = (long)(ranges["s"].Max - ranges["s"].Min) + 1;
+    if (diffX < 0 || diffM < 0 || diffA < 0 || diffS < 0) return 0;
+    return diffX * diffM * diffA * diffS;
+}
+
+Dictionary<string, Range> GetValidValueRanges(Filter[] path)
+{
+    var validRanges = new Dictionary<string, Range>();
+    validRanges.Add("x", new Range { Min = 1, Max = 4000 });
+    validRanges.Add("m", new Range { Min = 1, Max = 4000 });
+    validRanges.Add("a", new Range { Min = 1, Max = 4000 });
+    validRanges.Add("s", new Range { Min = 1, Max = 4000 });
+    
+    foreach (var entry in path)
+    {
+        if (entry is { Value: not null, Gt: not null })
         {
-            yield return toy;
+            if (entry.Gt.Value && validRanges[entry.PropertyName].Min < entry.Value.Value + 1)
+            {
+                validRanges[entry.PropertyName].Min = entry.Value.Value + 1;
+            }
+            else if (!entry.Gt.Value && validRanges[entry.PropertyName].Max > entry.Value.Value - 1)
+            {
+                validRanges[entry.PropertyName].Max = entry.Value.Value - 1;
+            }
+        }
+    }
+
+    return validRanges;
+}
+
+IEnumerable<Filter[]> GetPathsToAcceptance(Workflow[] workflows)
+{
+    var acceptPoints = FindAllPointsFor("A", workflows);
+    
+    foreach (var acceptPoint in acceptPoints)
+    {
+        Stack<(Workflow, int, Filter[], bool)> stateStack = new Stack<(Workflow, int, Filter[], bool)>();
+        stateStack.Push((acceptPoint.Item1, acceptPoint.Item2, Array.Empty<Filter>(), false));
+        bool start = true;
+        
+        while (stateStack.Count > 0)
+        {
+            var position = stateStack.Pop();
+
+            var positionFilter = position.Item1.Filters[position.Item2];
+            if (!start &&
+                !position.Item4)
+            {
+                positionFilter = Filter.Reverse(positionFilter);
+            }
+            start = false;
+
+            var nextFilters = position.Item3.Append(positionFilter).ToArray();
+            
+            if (position.Item1.Label == "in" && position.Item2 == 0)
+            {
+                yield return nextFilters;
+            }
+            
+            if (position.Item2 > 0)
+            {
+                stateStack.Push((position.Item1, position.Item2 - 1, nextFilters, false));
+            }
+            else
+            {
+                var points = FindAllPointsFor(position.Item1.Label, workflows);
+                foreach (var entry in points)
+                {
+                    stateStack.Push((entry.Item1, entry.Item2, (Filter[])nextFilters.Clone(), true));
+                }
+            }
         }
     }
 }
+
+List<(Workflow, int)> FindAllPointsFor(string label, Workflow[] workflows)
+{
+    List<(Workflow, int)> points = new List<(Workflow, int)>();
+    foreach (var workflow in workflows)
+    {
+        for (int i = 0; i < workflow.Filters.Length; i++)
+        {
+            if (workflow.Filters[i].Destination == label)
+            {
+                points.Add((workflow, i));
+            }
+        }
+    }
+
+    return points;
+}
+
 
 IEnumerable<string[]> BreakByEmptyLine(string[] data)
 {
@@ -111,6 +193,12 @@ Dictionary<string, int> ParseToy(string input)
         result[properyParts[0]] = int.Parse(properyParts[1]);
     }
     return result;
+}
+
+record Range
+{
+    public int Min { get; set; }
+    public int Max { get; set; }
 }
 
 record Workflow(string Label, Filter[] Filters)
@@ -152,5 +240,11 @@ record Filter(Func<Dictionary<string, int>, bool> Function, string PropertyName,
         return new Filter(
             T => gT ? T[propertyName] > value : T[propertyName] < value,
             propertyName, gT, value, parts[1]);
+    }
+
+    public static Filter Reverse(Filter filter)
+    {
+        return new Filter(T => filter.Gt.Value ? T[filter.PropertyName] < filter.Value + 1 : T[filter.PropertyName] > filter.Value - 1,
+            filter.PropertyName, !filter.Gt, filter.Gt.Value ? filter.Value + 1 : filter.Value - 1, ">A");
     }
 };
