@@ -1,25 +1,42 @@
-﻿AssertFor(@"1,0,1~1,2,1
+﻿var exampleInput = @"1,0,1~1,2,1
 0,0,2~2,0,2
 0,2,3~2,2,3
 0,0,4~0,2,4
 2,0,5~2,2,5
 0,1,6~2,1,6
-1,1,8~1,1,9", 5);
+1,1,8~1,1,9";
+
+AssertFor(exampleInput, false, 5);
+AssertFor(exampleInput, true, 7);
 
 var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\22-1\input.txt");
-Console.WriteLine(RunFor(lines, true));
+Console.WriteLine(RunFor(lines, true, true));
 
-long RunFor(string[] input, bool logging)
+
+long RunFor(string[] input, bool part2, bool logging)
 {
     var tower = GetTower(input);
     tower.SettlePile();
-    return tower.CountRemovable();
+
+    if (part2)
+    {
+        var answer = tower.GetFallingBricksByRemovedBrick();
+        foreach (var entry in answer)
+        {
+            Console.WriteLine(entry);
+        }
+        return answer.Sum(x => x.Value);
+    }
+    else
+    {
+        return tower.CountRemovable();
+    }
 }
 
-void AssertFor(string input, long expectedResult)
+void AssertFor(string input, bool part2, long expectedResult)
 {
     var lines = input.Split(System.Environment.NewLine);
-    var result = RunFor(lines, false);
+    var result = RunFor(lines, part2, false);
     if (result != expectedResult)
     {
         foreach (var line in lines)
@@ -136,6 +153,33 @@ class SandTower
         }
     }
 
+    public Dictionary<string, int> GetFallingBricksByRemovedBrick()
+    {
+        return _blocks.ToDictionary(b => b.Label, HowManyBlocksFallFor);
+    }
+
+    private int HowManyBlocksFallFor(Block block)
+    {
+        var removedLastTime = new List<Block> { block };
+        var fallenBlocks = new HashSet<Block> { block };
+        while (removedLastTime.Count > 0)
+        {
+            var removedThisTime = new List<Block>();
+            foreach (var previouslySupportedBlock in removedLastTime.SelectMany(b => GetBlocksSupportedBy(b)))
+            {
+                if (!fallenBlocks.Contains(previouslySupportedBlock) && !IsSupported(previouslySupportedBlock, fallenBlocks))
+                {
+                    fallenBlocks.Add(previouslySupportedBlock);
+                    removedThisTime.Add(previouslySupportedBlock);
+                }
+            }
+
+            removedLastTime = removedThisTime;
+        }
+
+        return fallenBlocks.Count - 1;
+    }
+    
     public void SettlePile()
     {
         var unsupported = new Queue<Block>(_blocks.Where(b => !IsSupported(b)));
@@ -195,9 +239,13 @@ class SandTower
         }
     }
     
-    private bool IsSupported(Block block)
+    private bool IsSupported(Block block, HashSet<Block> blocksToExclude = null)
     {
-        return GetPointsAboveOrBelowBlock(block, true).Any(p => _impassable[p.X, p.Y, p.Height] != null);
+        return GetPointsAboveOrBelowBlock(block, true).Any(p =>
+        {
+            return _impassable[p.X, p.Y, p.Height] != null && 
+                   (blocksToExclude == null || !blocksToExclude.Contains(_impassable[p.X, p.Y, p.Height]));
+        });
     }
 
     private IEnumerable<Point> GetPointsAboveOrBelowBlock(Block block, bool below)
