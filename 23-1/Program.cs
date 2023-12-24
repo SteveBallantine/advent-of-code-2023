@@ -13,18 +13,18 @@ var w = directions.Single(d => d.Label == 'W');
 Dictionary<char, Direction[]> validDirectionsFrom = new Dictionary<char, Direction[]>
 {
     { '.', new Direction[] { n, s, e, w } },
-    { '>', new Direction[] { e } },
-    { '<', new Direction[] { w } },
-    { '^', new Direction[] { n } },
-    { 'v', new Direction[] { s } },
+    { '>', new Direction[] { e, w, n, s } },
+    { '<', new Direction[] { w, e, n, s } },
+    { '^', new Direction[] { n, s, e, w } },
+    { 'v', new Direction[] { s, n, e, w } },
 };
 Dictionary<char, Direction[]> validDirectionsTo = new Dictionary<char, Direction[]>
 {
     { '.', new Direction[] { n, s, e, w } },
-    { '>', new Direction[] { n, s, e } },
-    { '<', new Direction[] { n, s, w } },
-    { '^', new Direction[] { e, w, n } },
-    { 'v', new Direction[] { e, w, s } },
+    { '>', new Direction[] { n, s, e, w } },
+    { '<', new Direction[] { n, s, w, e } },
+    { '^', new Direction[] { e, w, n, s } },
+    { 'v', new Direction[] { e, w, s, n } },
 };
 
 
@@ -52,7 +52,7 @@ var exampleInput = @"#.#####################
 #.....###...###...#...#
 #####################.#";
 
-AssertFor(exampleInput, 94);
+AssertFor(exampleInput, 154);
 
 var lines = File.ReadAllLines(@"C:\Repos\advent-of-code-2023\23-1\input.txt");
 Console.WriteLine(RunFor(lines, true));
@@ -62,7 +62,21 @@ long RunFor(string[] input, bool logging)
     var map = CreateMap(input);
     var pathSegments = map.GetAsPathSegments();
     
-    return pathSegments.GetPathLengths().Max() - 1;
+    var results = pathSegments.GetPathLengths(new Node[0]);
+    var temp = results.ToList();
+
+    /*var path = results.OrderByDescending(x => x.Count).First();
+    for (int i = 0; i < map.Height; i++)
+    {
+        for (int j = 0; j < map.Width; j++)
+        {
+            var point = new Point(j, i);
+            Console.Write(path.Contains(point) ? "O" : map.GetChar(point));
+        }
+        Console.WriteLine();
+    }*/
+
+    return temp.Max() - 1;
 }
 
 void AssertFor(string input, long expectedResult)
@@ -94,6 +108,8 @@ class Map
     private Dictionary<char, Direction[]> _validDirectionsFrom;
     private Dictionary<char, Direction[]> _validDirectionsTo;
     private Dictionary<Point, PathSegment> _segmentsByStart = new Dictionary<Point, PathSegment>();
+    private Dictionary<Point, PathSegment> _segmentsByEnd = new Dictionary<Point, PathSegment>();
+    private Dictionary<Point, Node> _nodes;
     
     public int Width => _locations[0].Length;
     public int Height => _locations.Length;
@@ -111,17 +127,48 @@ class Map
         _validDirectionsFrom = validDirectionsFrom;
         _validDirectionsTo = validDirectionsTo;
     }
-
+    
     public PathSegment GetAsPathSegments()
     {
-        return BuildPathFrom(new Point(1, 0));
+        return CreateGraph(new Point(1, 0));
+    }
+    
+    private PathSegment CreateGraph(Point start)
+    {
+        _nodes = new Dictionary<Point, Node>();
+        for (int y = 0; y < Height; y++)
+        {
+            for(int x = 0; x < Width; x++)
+            {
+                var point = new Point(x, y);
+                if (GetChar(point) == '.' &&
+                   _directions.All(d => GetNextPointInDirection(d.Value, point) != null && GetChar(GetNextPointInDirection(d.Value, point).B) != '.'))
+                {
+                    _nodes.Add(point, new Node(point, new List<PathSegment>()));
+                }
+            }
+        }
+
+        foreach (var node in _nodes)
+        {
+            foreach (var startPoint in _directions.Select(d => GetNextPointInDirection(d.Value, node.Key).B).Where(b => GetChar(b) != '#'))
+            {
+                node.Value.ConnectedPaths.Add(BuildPathFrom(startPoint, node.Key));
+            }
+        }
+
+        return _segmentsByEnd[new Point(1, 0)];
     }
 
-    private PathSegment BuildPathFrom(Point start)
+    private PathSegment BuildPathFrom(Point start, Point? lastJoinPoint)
     {
         if (_segmentsByStart.TryGetValue(start, out var segment))
         {
             return segment;
+        }
+        if (_segmentsByEnd.TryGetValue(start, out var segment2))
+        {
+            return segment2;
         }
 
         List<Point> path = new List<Point>();
@@ -134,7 +181,7 @@ class Map
             path.Add(currentPosition);
 
             foreach (var validMove in GetAdjacentPoints(currentPosition)
-                         .Where(x => GetChar(x.B) == '.' && IsValidMove(x) && !path.Contains(x.B)))
+                         .Where(x => x.B != lastJoinPoint && GetChar(x.B) == '.' && IsValidMove(x) && !path.Contains(x.B)))
             {
                 validMoves.Enqueue(validMove.B);
             }
@@ -145,21 +192,23 @@ class Map
             }
         }
 
-        var newSegment = new PathSegment(path, new List<PathSegment>());
-        _segmentsByStart.Add(path[0], newSegment);
-
+        Point? joinPoint = null;
         var nextLocations = GetAdjacentPoints(path[^1]).Where(x => GetChar(x.B) != '.' && IsValidMove(x)).ToList();
         if (nextLocations.Any())
         {
             var passableSlope = nextLocations.Single();
-            var joinPoint = GetAdjacentPoints(passableSlope.B).Single(IsValidMove).B;
-
-            foreach (var startOfNextSegment in GetAdjacentPoints(joinPoint).Where(IsValidMove))
-            {
-                newSegment.NextSegments.Add(BuildPathFrom(startOfNextSegment.B));
-            }
+            path.Add(passableSlope.B);
+            joinPoint = GetAdjacentPoints(path[^1]).Single(x => !path.Contains(x.B) && IsValidMove(x)).B;
         }
 
+        var joinPointList = new List<Point>();
+        if(joinPoint != null) joinPointList.Add(joinPoint);
+        if(lastJoinPoint != null) joinPointList.Add(lastJoinPoint);
+        
+        var newSegment = new PathSegment(path, _nodes[joinPointList[0]], joinPointList.Count == 2 ? _nodes[joinPointList[1]] : null);
+        _segmentsByStart.Add(path[0], newSegment);
+        _segmentsByEnd.Add(path[^1], newSegment);
+        
         return newSegment;
     }
 
@@ -210,23 +259,38 @@ class Map
     }
 }
 
-record PathSegment(List<Point> Path, List<PathSegment> NextSegments)
+record PathSegment(List<Point> Path, Node NodeA, Node? NodeB)
 {
-    public IEnumerable<int> GetPathLengths()
+    public IEnumerable<int> GetPathLengths(Node[] nodesUsed)
     {
-        if (NextSegments.Count == 0)
+        if (NodeB is null && nodesUsed.Length > 0)
         {
             yield return Path.Count;
         }
         else
         {
-            foreach (var pathLengthFromNextSegment in NextSegments.SelectMany(s => s.GetPathLengths()))
+            Node? nextNode = null;
+            if (!nodesUsed.Contains(NodeA)) nextNode = NodeA; 
+            if (NodeB != null && !nodesUsed.Contains(NodeB)) nextNode = NodeB;
+
+            if (nextNode != null)
             {
-                yield return pathLengthFromNextSegment + Path.Count + 2;
+                var validNextSegments = nextNode.ConnectedPaths.Where(x => x != this);
+                var updatedJointPointsUsed = nodesUsed.Append(nextNode).ToArray();
+
+                foreach (var nextSegment in validNextSegments)
+                {
+                    foreach (var length in nextSegment.GetPathLengths(updatedJointPointsUsed))
+                    {
+                        yield return length + Path.Count + 1;
+                    }
+                }
             }
         }
     }
 }
+
+record Node(Point Location, List<PathSegment> ConnectedPaths);
 
 record PointPair(Point A, Point B, Direction DirectionFromAToB);
 
